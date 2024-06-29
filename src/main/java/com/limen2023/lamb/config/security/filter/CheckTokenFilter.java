@@ -1,5 +1,7 @@
 package com.limen2023.lamb.config.security.filter;
 
+import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONUtil;
 import com.limen2023.lamb.config.security.exception.CustomerAuthenticationException;
 import com.limen2023.lamb.config.security.handle.LoginFailureHandler;
 import com.limen2023.lamb.config.security.service.CustomerUserDetailsService;
@@ -35,6 +37,7 @@ public class CheckTokenFilter extends OncePerRequestFilter {
     private CustomerUserDetailsService customerUserDetailsService;
     @Resource
     private LoginFailureHandler loginFailureHandler;
+
     @Resource
     private RedisService redisService;
     //获取登录请求地址
@@ -98,6 +101,10 @@ public class CheckTokenFilter extends OncePerRequestFilter {
         if (userDetails == null) {
             throw new CustomerAuthenticationException("token验证失败");
         }
+        String user = redisService.get(username);
+        if (StrUtil.isEmpty(user)) {
+            redisService.set(username, JSONUtil.toJsonStr(userDetails),30*60*1000L);
+        }
         //创建身份验证对象
         UsernamePasswordAuthenticationToken authenticationToken = new
                 UsernamePasswordAuthenticationToken(userDetails, null,
@@ -106,5 +113,7 @@ public class CheckTokenFilter extends OncePerRequestFilter {
                 WebAuthenticationDetailsSource().buildDetails(request));
         //设置到Spring Security上下文
         SecurityContextHolder.getContext().setAuthentication(authenticationToken);
+        //验证通过刷新token
+        redisService.set(tokenKey,token,jwtUtils.getExpiration() / 1000);
     }
 }
